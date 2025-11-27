@@ -621,7 +621,6 @@ void DesktopDisplay::oledDrawRect(int x, int y, int w, int h, bool filled, bool 
     if (filled) {
         for (int yy = 0; yy < h; ++yy) {
             for (int xx = 0; xx < w; ++xx) {
-                // Direct buffer access to avoid recursive locking
                 int px = x + xx, py = y + yy;
                 if (px >= 0 && px < OLED_WIDTH && py >= 0 && py < OLED_HEIGHT) {
                     int index = py * OLED_WIDTH + px;
@@ -757,12 +756,16 @@ void DesktopDisplay::updateOledTexture() {
         return;
     }
     
-    uint32_t* texturePixels = static_cast<uint32_t*>(pixels);
+    // Respect pitch (stride) when writing rows. Some drivers pad lines so pitch != width*4.
+    auto* texturePixels = static_cast<uint32_t*>(pixels);
+    const int stride = pitch / 4;
     int pixelCount = 0;
     for (int y = 0; y < OLED_HEIGHT; ++y) {
+        uint32_t* dst = &texturePixels[y * stride];
+        const uint8_t* row = &oledBuffer[y * OLED_WIDTH];
         for (int x = 0; x < OLED_WIDTH; ++x) {
-            bool pixelOn = oledBuffer[y * OLED_WIDTH + x];
-            texturePixels[y * OLED_WIDTH + x] = pixelOn ? 0xFFFFFFFF : 0xFF000000;
+            bool pixelOn = row[x];
+            dst[x] = pixelOn ? 0xFFFFFFFFu : 0xFF000000u;
             if (pixelOn) pixelCount++;
         }
     }
@@ -770,10 +773,10 @@ void DesktopDisplay::updateOledTexture() {
     
     SDL_UnlockTexture(oledTexture);
     
-    // Present OLED window (match macOS approach)
+    // Present OLED window (match other backends)
     SDL_SetRenderTarget(oledRenderer, nullptr);
-    SDL_Rect oledViewport = {0, 0, OLED_WIDTH * 3, OLED_HEIGHT * 3};
-    SDL_RenderSetViewport(oledRenderer, &oledViewport);
+    // Reset viewport to default (logical size already set during init)
+    SDL_RenderSetViewport(oledRenderer, nullptr);
     
     SDL_SetRenderDrawColor(oledRenderer, 128, 128, 128, 255);
     SDL_RenderClear(oledRenderer);
