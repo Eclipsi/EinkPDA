@@ -3,8 +3,8 @@ name: Build Desktop Emulator
 on:
   push:
     branches: 
-        - main
-        - wasm
+      - main
+      - wasm
   pull_request:
     branches: [ main ]
 
@@ -80,3 +80,36 @@ jobs:
           desktop_emulator/build-windows/Release/PocketMage_Desktop_Emulator.exe
           desktop_emulator/build-windows/Debug/PocketMage_Desktop_Emulator.exe
           desktop_emulator/build-windows/PocketMage_Desktop_Emulator.exe
+
+  build-wasm:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/wasm' || github.event_name == 'push' || github.event_name == 'pull_request'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Emscripten SDK
+      run: |
+        set -e
+        git clone https://github.com/emscripten-core/emsdk.git emsdk
+        ./emsdk/emsdk install latest
+        ./emsdk/emsdk activate latest
+        source ./emsdk/emsdk_env.sh
+        emcc --version
+
+    - name: Install build deps
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential
+
+    - name: Configure & build WASM
+      run: |
+        set -e
+        source ./emsdk/emsdk_env.sh
+        emcmake cmake -S desktop_emulator -B desktop_emulator/build-wasm -DCMAKE_BUILD_TYPE=Release -DEMBED_ASSETS=ON
+        emmake cmake --build desktop_emulator/build-wasm -j$(nproc)
+
+    - name: Upload WASM artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: PocketMage-Emulator-wasm
+        path: desktop_emulator/build-wasm
