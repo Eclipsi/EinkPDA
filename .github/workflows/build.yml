@@ -2,7 +2,9 @@ name: Build Desktop Emulator
 
 on:
   push:
-    branches: [ main ]
+    branches: 
+        - main
+        - wasm
   pull_request:
     branches: [ main ]
 
