@@ -23,7 +23,7 @@ endif()
 # ---------------------------
 # Detect Emscripten
 # ---------------------------
-if(DEFINED ENV{EMSCRIPTEN}) # sometimes set by emsdk
+if(DEFINED ENV{EMSCRIPTEN})
   set(USED_EMSCRIPTEN TRUE)
 endif()
 if(NOT DEFINED USED_EMSCRIPTEN)
@@ -34,7 +34,6 @@ endif()
 
 if(USED_EMSCRIPTEN)
   message(STATUS "Configuring build for Emscripten / WebAssembly")
-  # Emscripten linker flags we want
   set(EMSCRIPTEN_COMMON_LINK_FLAGS
     "-sALLOW_MEMORY_GROWTH=1"
     "-sASSERTIONS=1"
@@ -49,16 +48,14 @@ endif()
 # ---------------------------
 set(_sdl_config_ok FALSE)
 
-# Prefer CMake CONFIG packages on Windows (vcpkg or official SDL2 devel zips)
 if (WIN32 AND NOT USED_EMSCRIPTEN)
-  find_package(SDL2 CONFIG QUIET)       # provides SDL2::SDL2 and (usually) SDL2::SDL2main
+  find_package(SDL2 CONFIG QUIET)
   if (TARGET SDL2::SDL2)
     set(_sdl_config_ok TRUE)
-    find_package(SDL2_ttf CONFIG REQUIRED)  # provides SDL2_ttf::SDL2_ttf
+    find_package(SDL2_ttf CONFIG REQUIRED)
   endif()
 endif()
 
-# Fallback to pkg-config (macOS/Linux; also works for MSYS2/MinGW on Windows)
 if (NOT _sdl_config_ok AND NOT USED_EMSCRIPTEN)
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(SDL2 REQUIRED sdl2)
@@ -85,12 +82,9 @@ if(USED_EMSCRIPTEN)
     set(EMSDK_ROOT $ENV{EMSDK})
     set(EMSCRIPTEN_SYS_INCLUDE "${EMSDK_ROOT}/upstream/emscripten/system/include")
     if(EXISTS "${EMSCRIPTEN_SYS_INCLUDE}")
-      # Add the top-level system include dir; SDL headers are under .../include/SDL or SDL2,
-      # adding the parent include directory ensures both <SDL.h> and <SDL2/SDL.h> style includes work.
       target_include_directories(SDL2::SDL2 INTERFACE "${EMSCRIPTEN_SYS_INCLUDE}")
       target_include_directories(SDL2_ttf::SDL2_ttf INTERFACE "${EMSCRIPTEN_SYS_INCLUDE}")
       message(STATUS "Added Emscripten system include directory: ${EMSCRIPTEN_SYS_INCLUDE}")
-      # Also add path to upstream/emscripten/system/local/include if present (some emsdk layouts)
       if(EXISTS "${EMSDK_ROOT}/upstream/emscripten/system/local/include")
         target_include_directories(SDL2::SDL2 INTERFACE "${EMSDK_ROOT}/upstream/emscripten/system/local/include")
         target_include_directories(SDL2_ttf::SDL2_ttf INTERFACE "${EMSDK_ROOT}/upstream/emscripten/system/local/include")
@@ -137,7 +131,6 @@ set(POCKETMAGE_SOURCES_MANUAL
 # ---------------------------
 # Project sources / includes
 # ---------------------------
-# Base emulator sources (cross-platform)
 set(EMULATOR_SOURCES
   src/main_new.cpp
   src/hardware_shim.cpp
@@ -145,8 +138,6 @@ set(EMULATOR_SOURCES
   src/text_utils_desktop.cpp
 )
 
-# Platform-specific display backend
-# For Emscripten use the cross-platform SDL2 backend (desktop_display_sdl2.cpp)
 if(USED_EMSCRIPTEN)
   message(STATUS "Using cross-platform display backend for Emscripten")
   list(APPEND EMULATOR_SOURCES src/desktop_display_sdl2.cpp)
@@ -176,12 +167,19 @@ target_include_directories(${PROJECT_NAME} PRIVATE
   ${POCKETMAGE_INCLUDE}
 )
 
+# If building for Emscripten and EMSDK include dir was discovered, make sure the executable also has it.
+if(USED_EMSCRIPTEN AND DEFINED EMSCRIPTEN_SYS_INCLUDE)
+  target_include_directories(${PROJECT_NAME} PRIVATE "${EMSCRIPTEN_SYS_INCLUDE}")
+  if(DEFINED EMSDK_ROOT)
+    target_include_directories(${PROJECT_NAME} PRIVATE "${EMSDK_ROOT}/upstream/emscripten/system/local/include")
+  endif()
+endif()
+
 # ---------------------------
 # Platform-specific definitions & compile options
 # ---------------------------
 target_compile_definitions(${PROJECT_NAME} PRIVATE DESKTOP_EMULATOR)
 
-# Emscripten-specific options
 if(USED_EMSCRIPTEN)
   target_compile_definitions(${PROJECT_NAME} PRIVATE SDL_MAIN_HANDLED)
   target_compile_options(${PROJECT_NAME} PRIVATE "-O2")
@@ -200,7 +198,6 @@ if(USED_EMSCRIPTEN)
     endif()
   endif()
 else()
-  # Windows-specific settings
   if (WIN32)
     message(STATUS "Applying Windows-specific build settings")
     target_compile_definitions(${PROJECT_NAME} PRIVATE SDL_MAIN_HANDLED)
